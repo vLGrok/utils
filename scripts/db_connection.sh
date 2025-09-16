@@ -18,12 +18,13 @@ Options:
 	-q QUERY           Query to run (default: SELECT 1;)
 	-s SSLMODE         SSL mode (default: require) one of: disable|allow|prefer|require|verify-ca|verify-full
 	-C CA_CERT_FILE    Root CA certificate file (sets PGSSLROOTCERT). Implies SSL.
+	-t SECONDS         Connection timeout in seconds (psql --connect-timeout). Default: 10 (env DB_CONNECT_TIMEOUT overrides)
 	-v                 Verbose (show psql command and timing)
 	-x                 Bash xtrace (debug)
 	-?                 Show this help
 
-Environment overrides: DB_HOST, DB_NAME, DB_PORT, PGSSLMODE, PGSSLROOTCERT
-Default encryption: sslmode=require unless overridden.
+Environment overrides: DB_HOST, DB_NAME, DB_PORT, PGSSLMODE, PGSSLROOTCERT, DB_CONNECT_TIMEOUT
+Defaults: sslmode=require, connect-timeout=10s unless overridden.
 EOF
 }
 
@@ -32,8 +33,9 @@ DEBUG=0
 CUSTOM_QUERY=""
 SSLMODE=""
 CA_CERT=""
+CONNECT_TIMEOUT=""
 
-while getopts ":u:d:h:p:q:s:C:vx?" opt; do
+while getopts ":u:d:h:p:q:s:C:t:vx?" opt; do
 	case $opt in
 		u) DB_USER="$OPTARG" ;;
 		d) DB_NAME="$OPTARG" ;;
@@ -42,6 +44,7 @@ while getopts ":u:d:h:p:q:s:C:vx?" opt; do
 		q) CUSTOM_QUERY="$OPTARG" ;;
 		s) SSLMODE="$OPTARG" ;;
 		C) CA_CERT="$OPTARG" ;;
+		t) CONNECT_TIMEOUT="$OPTARG" ;;
 		v) VERBOSE=1 ;;
 		x) DEBUG=1 ;;
 		?) usage; exit 0 ;;
@@ -58,6 +61,21 @@ DB_HOST=${DB_HOST:-oltp-ro.ua-premiums.zelis.com}
 DB_NAME=${DB_NAME:-premiums}
 DB_PORT=${DB_PORT:-5432}
 QUERY=${CUSTOM_QUERY:-"SELECT 1;"}
+
+# Resolve timeout precedence: flag > env > default (10)
+if [[ -n "$CONNECT_TIMEOUT" ]]; then
+	: # keep value from flag
+elif [[ -n "$DB_CONNECT_TIMEOUT" ]]; then
+	CONNECT_TIMEOUT="$DB_CONNECT_TIMEOUT"
+else
+	CONNECT_TIMEOUT="10"
+fi
+
+# Validate timeout numeric
+if ! [[ $CONNECT_TIMEOUT =~ ^[0-9]+$ ]] || [[ $CONNECT_TIMEOUT -le 0 ]]; then
+	echo "Invalid timeout value (must be positive integer seconds): $CONNECT_TIMEOUT" >&2
+	exit 2
+fi
 
 if ! command -v psql >/dev/null 2>&1; then
 	echo "FAILED: psql command not found in PATH" >&2
@@ -91,7 +109,7 @@ if [[ -n "$CA_CERT" ]]; then
 fi
 
 if [[ $VERBOSE -eq 1 ]]; then
-	echo "SSL mode: ${PGSSLMODE}${PGSSLROOTCERT:+ (CA: $PGSSLROOTCERT)}" >&2
+	echo "SSL mode: ${PGSSLMODE}${PGSSLROOTCERT:+ (CA: $PGSSLROOTCERT)}; connect-timeout=${CONNECT_TIMEOUT}s" >&2
 fi
 
 [[ $VERBOSE -eq 1 ]] && echo "Testing connection to postgresql://$DB_HOST:$DB_PORT/$DB_NAME as $DB_USER" >&2
@@ -131,6 +149,7 @@ psql_output=$(psql \
 	-U "$DB_USER" \
 	-d "$DB_NAME" \
 	-p "$DB_PORT" \
+	--connect-timeout="$CONNECT_TIMEOUT" \
 	-v ON_ERROR_STOP=1 \
 	-Atqc "$QUERY" 2>&1)
 psql_status=$?

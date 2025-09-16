@@ -14,6 +14,7 @@ This document explains how to use the `db_connection.sh` helper script to quickl
 -q QUERY           Query to run (default: SELECT 1;)
 -s SSLMODE         SSL mode (default: require) one of: disable|allow|prefer|require|verify-ca|verify-full
 -C CA_CERT_FILE    Root CA certificate file (sets PGSSLROOTCERT). Implies SSL usage.
+-t SECONDS         Connection timeout in seconds (default: 10 or DB_CONNECT_TIMEOUT)
 -v                 Verbose (prints timing & raw query output)
 -x                 Enable bash xtrace (debug the script itself)
 -?                 Show help
@@ -42,6 +43,7 @@ Run with prompts for username and password:
 DB_PORT (default: 5432)
 PGSSLMODE (overrides default require if set)
 PGSSLROOTCERT (path to CA bundle)
+DB_CONNECT_TIMEOUT (seconds; overrides default 10 if -t not provided)
 ```
 You will be prompted for:
 1. Database username
@@ -57,6 +59,16 @@ bash scripts/db_connection.sh -u premiums_ro -s verify-full -C rds-ca.pem -v
 8. Disable SSL explicitly (for local/dev only):
 ```
 bash scripts/db_connection.sh -u local_user -s disable -h localhost -p 5432
+```
+
+9. Custom connection timeout (5 seconds):
+```
+bash scripts/db_connection.sh -u premiums_ro -t 5 -v
+```
+
+10. Set timeout via environment variable:
+```
+DB_CONNECT_TIMEOUT=3 bash scripts/db_connection.sh -u premiums_ro -v
 ```
 On success you will see:
 ```
@@ -136,6 +148,7 @@ bash scripts/db_connection.sh -u premiums_ro -v -x
 | `no pg_hba.conf entry` | User/host not authorized; check security groups & RDS pg_hba settings. |
 | `password authentication failed` | Wrong username/password; reset or re-enter. |
 | Hangs for a long time | Add `-v -x` to see progress; check network/firewall. |
+| `timeout expired` | Increase `-t` value or check network path / security groups. |
 
 ## Possible Enhancements (Not Implemented Yet)
 - JSON output mode (`--json` flag)
