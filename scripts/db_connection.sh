@@ -18,7 +18,7 @@ Options:
 	-q QUERY           Query to run (default: SELECT 1;)
 	-s SSLMODE         SSL mode (default: require) one of: disable|allow|prefer|require|verify-ca|verify-full
 	-C CA_CERT_FILE    Root CA certificate file (sets PGSSLROOTCERT). Implies SSL.
-	-t SECONDS         Connection timeout in seconds (psql --connect-timeout). Default: 10 (env DB_CONNECT_TIMEOUT overrides)
+	-t SECONDS         Connection timeout in seconds (sets PGCONNECT_TIMEOUT). Default: 10 (env DB_CONNECT_TIMEOUT overrides)
 	-v                 Verbose (show psql command and timing)
 	-x                 Bash xtrace (debug)
 	-?                 Show this help
@@ -108,8 +108,9 @@ if [[ -n "$CA_CERT" ]]; then
 	fi
 fi
 
+export PGCONNECT_TIMEOUT="$CONNECT_TIMEOUT"
 if [[ $VERBOSE -eq 1 ]]; then
-	echo "SSL mode: ${PGSSLMODE}${PGSSLROOTCERT:+ (CA: $PGSSLROOTCERT)}; connect-timeout=${CONNECT_TIMEOUT}s" >&2
+	echo "SSL mode: ${PGSSLMODE}${PGSSLROOTCERT:+ (CA: $PGSSLROOTCERT)}; connect-timeout=${PGCONNECT_TIMEOUT}s" >&2
 fi
 
 [[ $VERBOSE -eq 1 ]] && echo "Testing connection to postgresql://$DB_HOST:$DB_PORT/$DB_NAME as $DB_USER" >&2
@@ -149,7 +150,6 @@ psql_output=$(psql \
 	-U "$DB_USER" \
 	-d "$DB_NAME" \
 	-p "$DB_PORT" \
-	--connect-timeout="$CONNECT_TIMEOUT" \
 	-v ON_ERROR_STOP=1 \
 	-Atqc "$QUERY" 2>&1)
 psql_status=$?
